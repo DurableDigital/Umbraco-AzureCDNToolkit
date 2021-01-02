@@ -10,7 +10,6 @@ using Umbraco.Web.JavaScript;
 
 namespace Our.Umbraco.AzureCDNToolkit.Components
 {
-    // ReSharper disable once ClassNeverInstantiated.Global
     public class ServerVariableParserComponent : IComponent
     {
         public void Initialize()

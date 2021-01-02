@@ -5,7 +5,6 @@ using Umbraco.Web.PropertyEditors.ValueConverters;
 
 namespace Our.Umbraco.AzureCDNToolkit.Composers
 {
-    // ReSharper disable once UnusedType.Global
     public class UmbracoCdnToolkitComposer : IComposer
     {
 

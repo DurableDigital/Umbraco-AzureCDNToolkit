@@ -8,9 +8,11 @@ using HtmlAgilityPack;
 
 using Umbraco.Core;
 using Umbraco.Core.Models.PublishedContent;
+using Umbraco.Core.PropertyEditors;
 using Umbraco.Web;
 using Umbraco.Web.PropertyEditors.ValueConverters;
-using Umbraco.Core.PropertyEditors;
+using Umbraco.Web.Macros;
+using Umbraco.Web.Templates;
 
 namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
 {
@@ -22,10 +24,10 @@ namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
 
         public RteValueConverter(
             IUmbracoContextAccessor umbracoContextAccessor,
-            global::Umbraco.Web.Macros.IMacroRenderer macroRenderer,
-            global::Umbraco.Web.Templates.HtmlLocalLinkParser linkParser,
-            global::Umbraco.Web.Templates.HtmlUrlParser urlParser,
-            global::Umbraco.Web.Templates.HtmlImageSourceParser imageSourceParser)
+            IMacroRenderer macroRenderer,
+            HtmlLocalLinkParser linkParser,
+            HtmlUrlParser urlParser,
+            HtmlImageSourceParser imageSourceParser)
                 : base(umbracoContextAccessor, macroRenderer, linkParser, urlParser, imageSourceParser)
         {
             _umbracoContextAccessor = umbracoContextAccessor ?? throw new ArgumentNullException(nameof(umbracoContextAccessor));
@@ -36,25 +38,18 @@ namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
             // .Content in v7 is .Element in v8
             // https://our.umbraco.com/apidocs/v7/csharp/api/Umbraco.Core.PropertyEditors.PropertyCacheLevel.html
             // https://our.umbraco.com/apidocs/v8/csharp/api/Umbraco.Core.PropertyEditors.PropertyCacheLevel.html
-            return PropertyCacheLevel.Element; 
+            return PropertyCacheLevel.Element;
         }
 
-        public override System.Type GetPropertyValueType(IPublishedPropertyType propertyType)
+        public override object ConvertIntermediateToObject(IPublishedElement owner, IPublishedPropertyType propertyType, PropertyCacheLevel referenceCacheLevel, object source, bool preview)
         {
-            return typeof(IHtmlString);
-        }
 
-        public override object ConvertDataToSource(PublishedPropertyType propertyType, object source, bool preview)
-        {
             if (source == null)
             {
                 return null;
             }
 
-            var coreConversion = base.ConvertDataToSource(
-            propertyType,
-            source,
-            preview);
+            var coreConversion = base.ConvertIntermediateToObject(owner, propertyType, referenceCacheLevel, source, preview);
 
             // If toolkit is disabled then return base conversion
             if (!AzureCdnToolkit.Instance.UseAzureCdnToolkit)
@@ -97,7 +92,7 @@ namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
                     continue;
                 }
 
-                // html decode the url as variables encoded in tinymce
+                // html decode the url as variables encoded in TinyMCE
                 var src = HttpUtility.HtmlDecode(urlAttr.Value);
                 var resolvedSrc = string.Empty;
 
@@ -118,8 +113,7 @@ namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
                 if (idAttr != null)
                 {
                     // Umbraco media
-                    int nodeId;
-                    if (int.TryParse(idAttr.Value, out nodeId))
+                    if (int.TryParse(idAttr.Value, out var nodeId))
                     {
                         var node = _umbracoContextAccessor.UmbracoContext.Media.GetById(nodeId);
 
@@ -142,11 +136,11 @@ namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
                 }
                 else
                 {
-                    // Image in TinyMce doesn't have a data-id attribute so lets add package cache buster
+                    // Image in TinyMCE doesn't have a data-id attribute so lets add package cache buster
                     resolvedSrc = new UrlHelper().ResolveCdn(src, asset: asset).ToString();
                 }
 
-                // If the resolved url is different to the orginal change the src attribute
+                // If the resolved url is different to the original change the src attribute
                 if (string.IsNullOrWhiteSpace(resolvedSrc) || resolvedSrc == string.Concat(AzureCdnToolkit.Instance.Domain, src))
                 {
                     continue;

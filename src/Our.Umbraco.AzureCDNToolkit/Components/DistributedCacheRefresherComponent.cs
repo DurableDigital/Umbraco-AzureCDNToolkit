@@ -11,7 +11,6 @@ using Umbraco.Web.Cache;
 
 namespace Our.Umbraco.AzureCDNToolkit.Components
 {
-    // ReSharper disable once ClassNeverInstantiated.Global
     public class DistributedCacheRefresherComponent: IComponent
     {
 
@@ -51,13 +50,11 @@ namespace Our.Umbraco.AzureCDNToolkit.Components
 
             var payload = JsonConvert.DeserializeObject<CachedImagesRequest>(rawPayLoad);
 
-            if (
-                _serverRegistrationService.CurrentServerIdentity.InvariantEquals(
-                    payload.ServerIdentity))
+            if (_serverRegistrationService.CurrentServerIdentity.InvariantEquals(payload.ServerIdentity))
             {
                 // THIS SERVER SHOULD RETURN DATA VIA CacheImagesResponder
 
-                var cachedItems = Cache.GetCacheItemsByKeySearch<CachedImage>(AzureCDNToolkit.Constants.Keys.CachePrefix);
+                var cachedItems = Cache.GetCacheItemsByKeySearch<CachedImage>(Constants.Keys.CachePrefix);
 
                 var response = new CachedImagesResponse()
                 {
@@ -76,7 +73,7 @@ namespace Our.Umbraco.AzureCDNToolkit.Components
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
-        private void CacheResponder_Response(CacheResponder sender, CacheRefresherEventArgs e)
+        private static void CacheResponder_Response(CacheResponder sender, CacheRefresherEventArgs e)
         {
             var rawPayLoad = (string)e.MessageObject;
             var payload = JsonConvert.DeserializeObject<CachedImagesResponse>(rawPayLoad);
@@ -97,9 +94,7 @@ namespace Our.Umbraco.AzureCDNToolkit.Components
 
             var payload = JsonConvert.DeserializeObject<CachedImagesWipe>(rawPayLoad);
 
-            if (
-                _serverRegistrationService.CurrentServerIdentity.InvariantEquals(
-                    payload.ServerIdentity))
+            if (_serverRegistrationService.CurrentServerIdentity.InvariantEquals(payload.ServerIdentity))
             {
                 // This server should wipe it's application cache
 
@@ -110,14 +105,14 @@ namespace Our.Umbraco.AzureCDNToolkit.Components
                     var cacheKey = $"{cachePrefix}{payload.WebUrl}";
                     Cache.ClearCacheItem(cacheKey);
 
-                    _logger.Info<DistributedCacheRefresherComponent>("Azure CDN Toolkit: CDN image path runtime cache for key {WebUrl} cleared by dashboard control request", payload.WebUrl);
+                    _logger.Info<DistributedCacheRefresherComponent>("Azure CDN Toolkit: CDN image path runtime cache for key {WebUrl} cleared by dashboard control request.", payload.WebUrl);
                 }
                 else
                 {
                     // clear all keys
-                    Cache.ClearCacheByKeySearch(AzureCDNToolkit.Constants.Keys.CachePrefix);
+                    Cache.ClearCacheByKeySearch(Constants.Keys.CachePrefix);
 
-                    _logger.Info<DistributedCacheRefresherComponent>("Azure CDN Toolkit: CDN image path runtime cache cleared by dashboard control request");
+                    _logger.Info<DistributedCacheRefresherComponent>("Azure CDN Toolkit: CDN image path runtime cache cleared by dashboard control request.");
                 }
 
             }

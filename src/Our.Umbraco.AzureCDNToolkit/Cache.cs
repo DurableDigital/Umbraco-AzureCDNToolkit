@@ -1,10 +1,11 @@
-﻿using Umbraco.Core.Composing;
+﻿using System;
+using System.Collections.Generic;
+
+using Umbraco.Core.Composing;
 using Umbraco.Core.Logging;
 
 namespace Our.Umbraco.AzureCDNToolkit
 {
-    using System;
-    using System.Collections.Generic;
 
     public static class Cache
     {

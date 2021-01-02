@@ -7,7 +7,6 @@ using Umbraco.Web.Security;
 
 namespace Our.Umbraco.AzureCDNToolkit.Components
 {
-    // ReSharper disable once ClassNeverInstantiated.Global
     public class ImageProcessorValidationComponent : IComponent
     {
         public void Initialize()

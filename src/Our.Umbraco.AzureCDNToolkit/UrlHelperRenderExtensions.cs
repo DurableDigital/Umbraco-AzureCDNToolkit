@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Globalization;
 using System.Net;
-using System.Text;
 using System.Web;
 using System.Web.Mvc;
 using System.Linq;
@@ -16,16 +15,16 @@ using Umbraco.Core.Composing;
 using Umbraco.Web;
 using Umbraco.Web.Models;
 using Umbraco.Core.Models.PublishedContent;
+using Umbraco.Core.PropertyEditors.ValueConverters;
 
 namespace Our.Umbraco.AzureCDNToolkit
 {
     public static class UrlHelperRenderExtensions
     {
         public static IHtmlString GetCropCdnUrl(this UrlHelper urlHelper,
-            ImageCropDataSet imageCropper,
+            ImageCropperValue imageCropperValue,
             int? width = null,
             int? height = null,
-            string propertyAlias = global::Umbraco.Core.Constants.Conventions.Media.File,
             string cropAlias = null,
             int? quality = null,
             ImageCropMode? imageCropMode = null,
@@ -41,14 +40,11 @@ namespace Our.Umbraco.AzureCDNToolkit
         {
 
             // if no cacheBusterValue provided we need to make one
-            if (cacheBusterValue == null)
-            {
-                cacheBusterValue = DateTime.UtcNow.ToFileTimeUtc().ToString(CultureInfo.InvariantCulture);
-            }
+            cacheBusterValue ??= DateTime.UtcNow.ToFileTimeUtc().ToString(CultureInfo.InvariantCulture);
 
-            var cropUrl = GetCropUrl(imageCropper.Src, imageCropper, width, height, cropAlias, quality, imageCropMode,
+            var cropUrl = urlHelper.GetCropUrl(imageCropperValue, width, height, cropAlias, quality, imageCropMode,
                 imageCropAnchor, preferFocalPoint, useCropDimensions, cacheBusterValue, furtherOptions, ratioMode,
-                upScale);
+                upScale, false).ToString();
 
             return UrlToCdnUrl(cropUrl, htmlEncode);
         }
@@ -71,25 +67,24 @@ namespace Our.Umbraco.AzureCDNToolkit
             bool htmlEncode = true
             )
         {
-            var cropUrl =
-                urlHelper.GetCropUrl(mediaItem, width, height, propertyAlias, cropAlias, quality, imageCropMode,
-                    imageCropAnchor, preferFocalPoint, useCropDimensions, cacheBuster, furtherOptions, ratioMode, upScale, false)
-                    .ToString();
+            var cropUrl = urlHelper.GetCropUrl(mediaItem, width, height, propertyAlias, cropAlias, quality, imageCropMode,
+                imageCropAnchor, preferFocalPoint, useCropDimensions, cacheBuster, furtherOptions, ratioMode,
+                upScale, false).ToString();
 
             return UrlToCdnUrl(cropUrl, htmlEncode);
         }
 
         public static IHtmlString ResolveCdn(this UrlHelper urlHelper, string path, bool asset = true, bool htmlEncode = true)
         {
-            return ResolveCdn(urlHelper, path, AzureCdnToolkit.Instance.CdnPackageVersion, asset, htmlEncode:htmlEncode);
+            return ResolveCdn(urlHelper, path, AzureCdnToolkit.Instance.CdnPackageVersion, asset, htmlEncode: htmlEncode);
         }
 
-        // Special version of the method with fallback image for TinyMce converter
+        // Special version of the method with fallback image for TinyMCE converter
         internal static IHtmlString ResolveCdnFallback(this UrlHelper urlHelper, IPublishedContent mediaItem, bool asset = true, string querystring = null, bool htmlEncode = true, string fallbackImage = null)
         {
-            Current.Logger.Debug(typeof(UrlHelperRenderExtensions), "Parsed out media item from TinyMce: {Name}", mediaItem.Name);
+            Current.Logger.Debug(typeof(UrlHelperRenderExtensions), "Parsed out media item from TinyMCE: {Name}", mediaItem.Name);
             var std = ResolveCdn(urlHelper, mediaItem, asset, querystring, htmlEncode);
-            return std == null ? ResolveCdn(urlHelper, fallbackImage, asset, htmlEncode) : std;
+            return std ?? ResolveCdn(urlHelper, fallbackImage, asset, htmlEncode);
         }
 
         public static IHtmlString ResolveCdn(this UrlHelper urlHelper, IPublishedContent mediaItem, bool asset = true, string querystring = null, bool htmlEncode = true)
@@ -102,10 +97,10 @@ namespace Our.Umbraco.AzureCDNToolkit
             if (path == null)
             {
                 // attempt to get value from Cropper if there is one
-                var umbracoFile = mediaItem.GetProperty(global::Umbraco.Core.Constants.Conventions.Media.File).DataValue.ToString();
+                var umbracoFile = mediaItem.GetProperty(global::Umbraco.Core.Constants.Conventions.Media.File).GetSourceValue().ToString();
                 if (!string.IsNullOrEmpty(umbracoFile))
                 {
-                    var cropper = JsonConvert.DeserializeObject<ImageCropDataSet>(umbracoFile);
+                    var cropper = JsonConvert.DeserializeObject<ImageCropperValue>(umbracoFile);
                     if (cropper != null)
                     {
                         path = cropper.Src;
@@ -120,7 +115,7 @@ namespace Our.Umbraco.AzureCDNToolkit
 
             if (querystring != null)
             {
-                path = string.Format("{0}?{1}", path, querystring);
+                path = $"{path}?{querystring}";
             }
 
             return ResolveCdn(urlHelper, path, cacheBusterValue, asset, "rnd", htmlEncode);
@@ -130,37 +125,28 @@ namespace Our.Umbraco.AzureCDNToolkit
         {
             if (AzureCdnToolkit.Instance.UseAzureCdnToolkit)
             {
-                var hasQuerystring = path.InvariantContains("?");
                 var absoluteDomain = AzureCdnToolkit.Instance.Domain ?? HttpContext.Current.Request.Url.GetLeftPart(UriPartial.Authority);
-                var wasAbsolute = false;
-
-                Uri srcUri;
-                if (Uri.TryCreate(path, UriKind.Absolute, out srcUri))
-                {
-                    wasAbsolute = true;
-                }
+                bool wasAbsolute = Uri.TryCreate(path, UriKind.Absolute, out var srcUri);
 
                 if (srcUri == null)
                 {
                     // relative url that we need to make absolute so that Uri works properly
-                    Uri.TryCreate(string.Format("{0}{1}", absoluteDomain, path), UriKind.Absolute, out srcUri);
+                    Uri.TryCreate($"{absoluteDomain}{path}", UriKind.Absolute, out srcUri);
                 }
 
                 var qs = srcUri.ParseQueryString();
 
-                if (wasAbsolute &&
-                    string.Format("{0}://{1}", srcUri.Scheme, srcUri.DnsSafeHost) != absoluteDomain)
+                if (wasAbsolute && $"{srcUri.Scheme}://{srcUri.DnsSafeHost}" != absoluteDomain)
                 {
                     // absolute url already and not this site - abort!
                     return new HtmlString(path);
                 }
 
-                var separator = path.InvariantContains("?") ? "&" : "?";
                 string cdnPath;
 
                 if (asset && !path.InvariantContains("/media/"))
                 {
-                   cdnPath = string.Format("{0}/{1}", AzureCdnToolkit.Instance.CdnUrl, AzureCdnToolkit.Instance.AssetsContainer);
+                    cdnPath = $"{AzureCdnToolkit.Instance.CdnUrl}/{AzureCdnToolkit.Instance.AssetsContainer}";
                 }
                 else
                 {
@@ -171,16 +157,21 @@ namespace Our.Umbraco.AzureCDNToolkit
                 if (qs["v"] == null && qs["rnd"] == null)
                 {
                     qs.Add(cacheBusterName, cacheBuster);
-                    path = string.Format("{0}?{1}", srcUri.LocalPath, qs);
+                    path = $"{srcUri.LocalPath}?{qs}";
                 }
 
+                bool hasContext = false;
+                var umbracoContextFactory = DependencyResolver.Current.GetService<IUmbracoContextFactory>();
+                if (umbracoContextFactory != null)
+                    using (var contextReference = umbracoContextFactory.EnsureUmbracoContext())
+                        hasContext = contextReference.UmbracoContext != null;
 
                 // TRY for ImageProcessor Azure Cache and check for ApplicationContext.Current (otherwise a test)
-                if (!asset && ApplicationContext.Current != null)
+                if (!asset && hasContext)
                 {
-                    var azureCachePath = UrlToCdnUrl(path, false, currentDomain: absoluteDomain).ToString();
+                    var azureCachePath = UrlToCdnUrl(path, false, absoluteDomain).ToString();
 
-                    if (!azureCachePath.InvariantEquals(string.Format("{0}{1}", absoluteDomain, path)))
+                    if (!azureCachePath.InvariantEquals($"{absoluteDomain}{path}"))
                     {
                         path = azureCachePath;
                     }
@@ -196,15 +187,14 @@ namespace Our.Umbraco.AzureCDNToolkit
                     // Adjust for custom media container names
                     if (!AzureCdnToolkit.Instance.MediaContainer.InvariantEquals("media"))
                     {
-                        srcUri = new Uri(srcUri.AbsoluteUri.Replace("/media/",
-                            string.Format("/{0}/", AzureCdnToolkit.Instance.MediaContainer)));
+                        srcUri = new Uri(srcUri.AbsoluteUri.Replace("/media/", $"/{AzureCdnToolkit.Instance.MediaContainer}/"));
                     }
 
                     if (qs["rnd"] != null)
                     {
                         cacheBusterName = "rnd";
                     }
-                    path = string.Format("{0}{1}?{2}={3}", cdnPath, srcUri.LocalPath, cacheBusterName, cacheBuster);
+                    path = $"{cdnPath}{srcUri.LocalPath}?{cacheBusterName}={cacheBuster}";
                 }
             }
 
@@ -219,7 +209,7 @@ namespace Our.Umbraco.AzureCDNToolkit
                 return new HtmlString(string.Empty);
             }
 
-            // If toolkit disabled return orginal string
+            // If toolkit disabled return original string
             if (!AzureCdnToolkit.Instance.UseAzureCdnToolkit)
             {
                 return new HtmlString(cropUrl);
@@ -231,9 +221,9 @@ namespace Our.Umbraco.AzureCDNToolkit
             }
 
             var cachePrefix = Constants.Keys.CachePrefix;
-            var cacheKey = string.Format("{0}{1}", cachePrefix, cropUrl);
+            var cacheKey = $"{cachePrefix}{cropUrl}";
 
-            var absoluteCropPath = string.Format("{0}{1}", currentDomain, cropUrl);
+            var absoluteCropPath = $"{currentDomain}{cropUrl}";
 
             var cachedItem = Cache.GetCacheItem<CachedImage>(cacheKey);
 
@@ -251,7 +241,7 @@ namespace Our.Umbraco.AzureCDNToolkit
                     var securityToken = WebConfigurationManager.AppSettings["AzureCDNToolkit:SecurityToken"];
                     if (!string.IsNullOrEmpty(securityToken))
                     {
-                        absoluteCropPath = string.Format("{0}&securitytoken={1}", absoluteCropPath, securityToken);
+                        absoluteCropPath = $"{absoluteCropPath}&securitytoken={securityToken}";
                     }
 
                     // Retry five times before giving up to account for networking issues
@@ -259,20 +249,18 @@ namespace Our.Umbraco.AzureCDNToolkit
                     {
                         var request = (HttpWebRequest)WebRequest.Create(absoluteCropPath);
                         request.Method = "HEAD";
-                        using (var response = (HttpWebResponse)request.GetResponse())
+                        using var response = (HttpWebResponse)request.GetResponse();
+                        var responseCode = response.StatusCode;
+                        if (responseCode.Equals(HttpStatusCode.OK))
                         {
-                            var responseCode = response.StatusCode;
-                            if (responseCode.Equals(HttpStatusCode.OK))
-                            {
-                                var absoluteUri = response.ResponseUri.AbsoluteUri;
-                                newCachedImage.CacheUrl = absoluteUri;
+                            var absoluteUri = response.ResponseUri.AbsoluteUri;
+                            newCachedImage.CacheUrl = absoluteUri;
 
-                                // this is to mark URLs returned direct to Blob by ImageProcessor as not fully resolved
-                                newCachedImage.Resolved = absoluteUri.InvariantContains(AzureCdnToolkit.Instance.CdnUrl);
+                            // this is to mark URLs returned direct to Blob by ImageProcessor as not fully resolved
+                            newCachedImage.Resolved = absoluteUri.InvariantContains(AzureCdnToolkit.Instance.CdnUrl);
 
-                                Cache.InsertCacheItem(cacheKey, () => newCachedImage);
-                                fullUrlPath = response.ResponseUri.AbsoluteUri;
-                            }
+                            Cache.InsertCacheItem(cacheKey, () => newCachedImage);
+                            fullUrlPath = response.ResponseUri.AbsoluteUri;
                         }
                     });
 
@@ -287,9 +275,12 @@ namespace Our.Umbraco.AzureCDNToolkit
                 Current.Logger.Error(typeof(UrlHelperRenderExtensions), ex, "Error resolving media url from the CDN");
 
                 // we have tried 5 times and failed so let's cache the normal address
-                var newCachedImage = new CachedImage { WebUrl = cropUrl };
-                newCachedImage.Resolved = false;
-                newCachedImage.CacheUrl = cropUrl;
+                var newCachedImage = new CachedImage
+                {
+                    WebUrl = cropUrl,
+                    Resolved = false,
+                    CacheUrl = cropUrl
+                };
                 Cache.InsertCacheItem(cacheKey, () => newCachedImage);
 
                 fullUrlPath = cropUrl;
@@ -322,138 +313,138 @@ namespace Our.Umbraco.AzureCDNToolkit
         }
 
         // This method is copied from Umbraco v7.4 as we need to support Umbraco v7.3 for the time being
-        private static string GetCropUrl(
-            this string imageUrl,
-            ImageCropDataSet cropDataSet,
-            int? width = null,
-            int? height = null,
-            string cropAlias = null,
-            int? quality = null,
-            ImageCropMode? imageCropMode = null,
-            ImageCropAnchor? imageCropAnchor = null,
-            bool preferFocalPoint = false,
-            bool useCropDimensions = false,
-            string cacheBusterValue = null,
-            string furtherOptions = null,
-            ImageCropRatioMode? ratioMode = null,
-            bool upScale = true)
-        {
-            if (string.IsNullOrEmpty(imageUrl) == false)
-            {
-                var imageProcessorUrl = new StringBuilder();
+        //private static string GetCropUrl(
+        //    this string imageUrl,
+        //    ImageCropDataSet cropDataSet,
+        //    int? width = null,
+        //    int? height = null,
+        //    string cropAlias = null,
+        //    int? quality = null,
+        //    ImageCropMode? imageCropMode = null,
+        //    ImageCropAnchor? imageCropAnchor = null,
+        //    bool preferFocalPoint = false,
+        //    bool useCropDimensions = false,
+        //    string cacheBusterValue = null,
+        //    string furtherOptions = null,
+        //    ImageCropRatioMode? ratioMode = null,
+        //    bool upScale = true)
+        //{
+        //    if (string.IsNullOrEmpty(imageUrl) == false)
+        //    {
+        //        var imageProcessorUrl = new StringBuilder();
 
-                if (cropDataSet != null && (imageCropMode == ImageCropMode.Crop || imageCropMode == null))
-                {
-                    var crop = cropDataSet.GetCrop(cropAlias);
+        //        if (cropDataSet != null && (imageCropMode == ImageCropMode.Crop || imageCropMode == null))
+        //        {
+        //            var crop = cropDataSet.GetCrop(cropAlias);
 
-                    imageProcessorUrl.Append(cropDataSet.Src);
+        //            imageProcessorUrl.Append(cropDataSet.Src);
 
-                    var cropBaseUrl = cropDataSet.GetCropBaseUrl(cropAlias, preferFocalPoint);
-                    if (cropBaseUrl != null)
-                    {
-                        imageProcessorUrl.Append(cropBaseUrl);
-                    }
-                    else
-                    {
-                        return null;
-                    }
+        //            var cropBaseUrl = cropDataSet.GetCropBaseUrl(cropAlias, preferFocalPoint);
+        //            if (cropBaseUrl != null)
+        //            {
+        //                imageProcessorUrl.Append(cropBaseUrl);
+        //            }
+        //            else
+        //            {
+        //                return null;
+        //            }
 
-                    if (crop != null & useCropDimensions)
-                    {
-                        width = crop.Width;
-                        height = crop.Height;
-                    }
+        //            if (crop != null & useCropDimensions)
+        //            {
+        //                width = crop.Width;
+        //                height = crop.Height;
+        //            }
 
-                    // If a predefined crop has been specified & there are no coordinates & no ratio mode, but a width parameter has been passed we can get the crop ratio for the height
-                    if (crop != null && string.IsNullOrEmpty(cropAlias) == false && crop.Coordinates == null && ratioMode == null && width != null && height == null)
-                    {
-                        var heightRatio = (decimal)crop.Height / (decimal)crop.Width;
-                        imageProcessorUrl.Append("&heightratio=" + heightRatio.ToString(CultureInfo.InvariantCulture));
-                    }
+        //            // If a predefined crop has been specified & there are no coordinates & no ratio mode, but a width parameter has been passed we can get the crop ratio for the height
+        //            if (crop != null && string.IsNullOrEmpty(cropAlias) == false && crop.Coordinates == null && ratioMode == null && width != null && height == null)
+        //            {
+        //                var heightRatio = (decimal)crop.Height / (decimal)crop.Width;
+        //                imageProcessorUrl.Append("&heightratio=" + heightRatio.ToString(CultureInfo.InvariantCulture));
+        //            }
 
-                    // If a predefined crop has been specified & there are no coordinates & no ratio mode, but a height parameter has been passed we can get the crop ratio for the width
-                    if (crop != null && string.IsNullOrEmpty(cropAlias) == false && crop.Coordinates == null && ratioMode == null && width == null && height != null)
-                    {
-                        var widthRatio = (decimal)crop.Width / (decimal)crop.Height;
-                        imageProcessorUrl.Append("&widthratio=" + widthRatio.ToString(CultureInfo.InvariantCulture));
-                    }
-                }
-                else
-                {
-                    imageProcessorUrl.Append(imageUrl);
+        //            // If a predefined crop has been specified & there are no coordinates & no ratio mode, but a height parameter has been passed we can get the crop ratio for the width
+        //            if (crop != null && string.IsNullOrEmpty(cropAlias) == false && crop.Coordinates == null && ratioMode == null && width == null && height != null)
+        //            {
+        //                var widthRatio = (decimal)crop.Width / (decimal)crop.Height;
+        //                imageProcessorUrl.Append("&widthratio=" + widthRatio.ToString(CultureInfo.InvariantCulture));
+        //            }
+        //        }
+        //        else
+        //        {
+        //            imageProcessorUrl.Append(imageUrl);
 
-                    if (imageCropMode == null)
-                    {
-                        imageCropMode = ImageCropMode.Pad;
-                    }
+        //            if (imageCropMode == null)
+        //            {
+        //                imageCropMode = ImageCropMode.Pad;
+        //            }
 
-                    imageProcessorUrl.Append("?mode=" + imageCropMode.ToString().ToLower());
+        //            imageProcessorUrl.Append("?mode=" + imageCropMode.ToString().ToLower());
 
-                    if (imageCropAnchor != null)
-                    {
-                        imageProcessorUrl.Append("&anchor=" + imageCropAnchor.ToString().ToLower());
-                    }
-                }
+        //            if (imageCropAnchor != null)
+        //            {
+        //                imageProcessorUrl.Append("&anchor=" + imageCropAnchor.ToString().ToLower());
+        //            }
+        //        }
 
-                if (quality != null)
-                {
-                    imageProcessorUrl.Append("&quality=" + quality);
-                }
+        //        if (quality != null)
+        //        {
+        //            imageProcessorUrl.Append("&quality=" + quality);
+        //        }
 
-                if (width != null && ratioMode != ImageCropRatioMode.Width)
-                {
-                    imageProcessorUrl.Append("&width=" + width);
-                }
+        //        if (width != null && ratioMode != ImageCropRatioMode.Width)
+        //        {
+        //            imageProcessorUrl.Append("&width=" + width);
+        //        }
 
-                if (height != null && ratioMode != ImageCropRatioMode.Height)
-                {
-                    imageProcessorUrl.Append("&height=" + height);
-                }
+        //        if (height != null && ratioMode != ImageCropRatioMode.Height)
+        //        {
+        //            imageProcessorUrl.Append("&height=" + height);
+        //        }
 
-                if (ratioMode == ImageCropRatioMode.Width && height != null)
-                {
-                    // if only height specified then assume a sqaure
-                    if (width == null)
-                    {
-                        width = height;
-                    }
+        //        if (ratioMode == ImageCropRatioMode.Width && height != null)
+        //        {
+        //            // if only height specified then assume a sqaure
+        //            if (width == null)
+        //            {
+        //                width = height;
+        //            }
 
-                    var widthRatio = (decimal)width / (decimal)height;
-                    imageProcessorUrl.Append("&widthratio=" + widthRatio.ToString(CultureInfo.InvariantCulture));
-                }
+        //            var widthRatio = (decimal)width / (decimal)height;
+        //            imageProcessorUrl.Append("&widthratio=" + widthRatio.ToString(CultureInfo.InvariantCulture));
+        //        }
 
-                if (ratioMode == ImageCropRatioMode.Height && width != null)
-                {
-                    // if only width specified then assume a sqaure
-                    if (height == null)
-                    {
-                        height = width;
-                    }
+        //        if (ratioMode == ImageCropRatioMode.Height && width != null)
+        //        {
+        //            // if only width specified then assume a sqaure
+        //            if (height == null)
+        //            {
+        //                height = width;
+        //            }
 
-                    var heightRatio = (decimal)height / (decimal)width;
-                    imageProcessorUrl.Append("&heightratio=" + heightRatio.ToString(CultureInfo.InvariantCulture));
-                }
+        //            var heightRatio = (decimal)height / (decimal)width;
+        //            imageProcessorUrl.Append("&heightratio=" + heightRatio.ToString(CultureInfo.InvariantCulture));
+        //        }
 
-                if (upScale == false)
-                {
-                    imageProcessorUrl.Append("&upscale=false");
-                }
+        //        if (upScale == false)
+        //        {
+        //            imageProcessorUrl.Append("&upscale=false");
+        //        }
 
-                if (furtherOptions != null)
-                {
-                    imageProcessorUrl.Append(furtherOptions);
-                }
+        //        if (furtherOptions != null)
+        //        {
+        //            imageProcessorUrl.Append(furtherOptions);
+        //        }
 
-                if (cacheBusterValue != null)
-                {
-                    imageProcessorUrl.Append("&rnd=").Append(cacheBusterValue);
-                }
+        //        if (cacheBusterValue != null)
+        //        {
+        //            imageProcessorUrl.Append("&rnd=").Append(cacheBusterValue);
+        //        }
 
-                return imageProcessorUrl.ToString();
-            }
+        //        return imageProcessorUrl.ToString();
+        //    }
 
-            return string.Empty;
-        }
+        //    return string.Empty;
+        //}
 
 
     }

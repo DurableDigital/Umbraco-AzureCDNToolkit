@@ -5,11 +5,6 @@ namespace Our.Umbraco.AzureCDNToolkit
     public sealed class AzureCdnToolkit
     {
         /// <summary>
-        /// singleton instance
-        /// </summary>
-        private static readonly AzureCdnToolkit azureCdnToolkit = new AzureCdnToolkit();
-
-        /// <summary>
         /// Initialises static members of the <see cref="AzureCdnToolkit"/> class
         /// </summary>
         static AzureCdnToolkit()
@@ -28,13 +23,7 @@ namespace Our.Umbraco.AzureCDNToolkit
         /// <summary>
         /// Gets the singleton instance of the <see cref="AzureCdnToolkit"/> class
         /// </summary>
-        public static AzureCdnToolkit Instance
-        {
-            get
-            {
-                return azureCdnToolkit;
-            }
-        }
+        public static AzureCdnToolkit Instance { get; } = new AzureCdnToolkit();
 
         /// <summary>
         /// Gets a value indicating whether the CDN prefix should be used
@@ -62,12 +51,12 @@ namespace Our.Umbraco.AzureCDNToolkit
         public string MediaContainer { get; set; }
 
         /// <summary>
-        /// Determines wqhether to use Redis Cache or Local Cache
+        /// Determines whether to use Redis Cache or Local Cache
         /// </summary>
         public bool UseRedisCache { get; set; }
 
         /// <summary>
-        /// Determines wqhether to use Redis Cache or Local Cache
+        /// Determines whether to use Redis Cache or Local Cache
         /// </summary>
         public string RedisCacheConnectionString { get; set; }
 

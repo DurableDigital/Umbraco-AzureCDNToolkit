@@ -7,19 +7,21 @@ using System.Text;
 using Newtonsoft.Json;
 
 using Umbraco.Core.Composing;
+using Umbraco.Core.PropertyEditors.ValueConverters;
 
 namespace Our.Umbraco.AzureCDNToolkit
 {
     internal static class ImageCropperBaseExtensions
     {
-        internal static ImageCropData GetImageCrop(this string json, string id)
+
+        internal static ImageCropperValue.ImageCropperCrop GetImageCrop(this string json, string id)
         {
-            var ic = new ImageCropData();
+            var ic = new ImageCropperValue.ImageCropperCrop();
             if (json.DetectIsJson())
             {
                 try
                 {
-                    var imageCropperSettings = JsonConvert.DeserializeObject<List<ImageCropData>>(json);
+                    var imageCropperSettings = JsonConvert.DeserializeObject<List<ImageCropperValue.ImageCropperCrop>>(json);
                     ic = imageCropperSettings.GetCrop(id);
                 }
                 catch (Exception ex)
@@ -31,14 +33,14 @@ namespace Our.Umbraco.AzureCDNToolkit
             return ic;
         }
 
-        internal static ImageCropDataSet SerializeToCropDataSet(this string json)
+        internal static ImageCropperValue SerializeToCropDataSet(this string json)
         {
-            var imageCrops = new ImageCropDataSet();
+            var imageCrops = new ImageCropperValue();
             if (json.DetectIsJson())
             {
                 try
                 {
-                    imageCrops = JsonConvert.DeserializeObject<ImageCropDataSet>(json);
+                    imageCrops = JsonConvert.DeserializeObject<ImageCropperValue>(json);
                 }
                 catch (Exception ex)
                 {
@@ -49,26 +51,31 @@ namespace Our.Umbraco.AzureCDNToolkit
             return imageCrops;
         }
 
-        internal static ImageCropData GetCrop(this ImageCropDataSet dataset, string cropAlias)
+        internal static ImageCropperValue.ImageCropperCrop GetCrop(this ImageCropperValue dataSet, string cropAlias)
         {
-            if (dataset == null || dataset.Crops == null || !dataset.Crops.Any())
+            if (dataSet == null || dataSet.Crops == null || !dataSet.Crops.Any())
                 return null;
 
-            return dataset.Crops.GetCrop(cropAlias);
+            return dataSet.Crops.GetCrop(cropAlias);
         }
 
-        internal static ImageCropData GetCrop(this IEnumerable<ImageCropData> dataset, string cropAlias)
+        internal static ImageCropperValue.ImageCropperCrop GetCrop(this IEnumerable<ImageCropperValue.ImageCropperCrop> dataSet, string cropAlias)
         {
-            if (dataset == null || !dataset.Any())
+
+            if (dataSet == null)
                 return null;
 
-            if (string.IsNullOrEmpty(cropAlias))
-                return dataset.FirstOrDefault();
+            var imageCropperCrops = dataSet as ImageCropperValue.ImageCropperCrop[] ?? dataSet.ToArray();
 
-            return dataset.FirstOrDefault(x => x.Alias.ToLowerInvariant() == cropAlias.ToLowerInvariant());
+            if (!imageCropperCrops.Any())
+                return null;
+
+            return string.IsNullOrEmpty(cropAlias)
+                ? imageCropperCrops.FirstOrDefault()
+                : imageCropperCrops.FirstOrDefault(x => string.Equals(x.Alias, cropAlias, StringComparison.InvariantCultureIgnoreCase));
         }
 
-        internal static string GetCropBaseUrl(this ImageCropDataSet cropDataSet, string cropAlias, bool preferFocalPoint)
+        internal static string GetCropBaseUrl(this ImageCropperValue cropDataSet, string cropAlias, bool preferFocalPoint)
         {
             var cropUrl = new StringBuilder();
 

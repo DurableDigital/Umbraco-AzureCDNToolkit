@@ -9,9 +9,7 @@
     public class RedisCache
     {
         private static readonly Lazy<ConnectionMultiplexer> LazyConnection = new Lazy<ConnectionMultiplexer>(() =>
-        {
-            return ConnectionMultiplexer.Connect(AzureCdnToolkit.Instance.RedisCacheConnectionString);
-        });
+            ConnectionMultiplexer.Connect(AzureCdnToolkit.Instance.RedisCacheConnectionString));
 
         public static ConnectionMultiplexer Connection => LazyConnection.Value;
 
@@ -26,7 +24,7 @@
                 return JsonConvert.DeserializeObject<T>(cacheItem.ToString());
             }
 
-            return default(T);
+            return default;
         }
 
         public static void InsertCacheItem<T>(string cacheKey, T item)

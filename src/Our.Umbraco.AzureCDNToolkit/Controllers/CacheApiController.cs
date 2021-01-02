@@ -31,7 +31,7 @@ namespace Our.Umbraco.AzureCDNToolkit.Controllers
         }
 
         /// <summary>
-        /// Sends a cache request message specifying a particular server retrun cache stats
+        /// Sends a cache request message specifying a particular server return cache stats
         /// </summary>
         /// ~/Umbraco/backoffice/AzureCDNToolkit/CacheApi/SendCachedImagesRequest
         [HttpPost]
@@ -40,7 +40,7 @@ namespace Our.Umbraco.AzureCDNToolkit.Controllers
         {
             var thisRequestId = Guid.NewGuid();
 
-            var thisRequest = new CachedImagesRequest()
+            var thisRequest = new CachedImagesRequest
             {
                 RequestId = thisRequestId,
                 ServerIdentity = serverIdentity
@@ -61,7 +61,7 @@ namespace Our.Umbraco.AzureCDNToolkit.Controllers
         [global::Umbraco.Web.WebApi.UmbracoAuthorize]
         public IEnumerable<CachedImage> GetAllCachedImagesFromRequest(string requestId)
         {
-            var cacheKey = string.Format("{0}{1}", Constants.Keys.CachePrefixResponse, requestId);
+            var cacheKey = $"{Constants.Keys.CachePrefixResponse}{requestId}";
 
             // it can take time for servers to return the data so try 6 times waiting 10 seconds between each try
             for (int retry = 0;; retry++)
@@ -91,7 +91,7 @@ namespace Our.Umbraco.AzureCDNToolkit.Controllers
         [global::Umbraco.Web.WebApi.UmbracoAuthorize]
         public void Wipe(string serverIdentity, string webUrl = null)
         {
-            var thisRequest = new CachedImagesWipe()
+            var thisRequest = new CachedImagesWipe
             {
                 ServerIdentity = serverIdentity,
                 WebUrl = webUrl
@@ -111,7 +111,7 @@ namespace Our.Umbraco.AzureCDNToolkit.Controllers
             // will try for 5 times waiting 3 seconds to get a list of servers as they can take time to register mainly when developing locally
             for (int retry = 0; ; retry++)
             {
-                var serverDetails = _serverRegistrationService.GetActiveServers();
+                var serverDetails = _serverRegistrationService.GetActiveServers().ToList();
                 if (serverDetails.Any())
                 {
                     return serverDetails.Select(server => server.ServerIdentity).ToArray();
