@@ -5,41 +5,48 @@
 
     using Microsoft.Web.XmlTransform;
 
-    using umbraco.cms.businesslogic.packager.standardPackageActions;
-    using umbraco.interfaces;
     using global::Umbraco.Core.Logging;
+    using global::Umbraco.Core.PackageActions;
+    using System.Xml.Linq;
+
     public class PackageActions
     {
         public class TransformConfig : IPackageAction
         {
+
+            private readonly ILogger _logger;
+
+            public TransformConfig(ILogger logger)
+            {
+                _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            }
+
             public string Alias()
             {
                 return "AzureCDNToolkit.TransformConfig";
             }
 
-            public bool Execute(string packageName, System.Xml.XmlNode xmlData)
+            public XElement SampleXml()
             {
-                return this.Transform(packageName, xmlData);
+                return XElement.Parse("<Action runat=\"install\" undo=\"true\" alias=\"AzureCDNToolkit.TransformConfig\" file=\"~/web.config\" xdtfile=\"~/app_plugins/AzureCDNToolkit/install/web.config\"></Action>");
             }
 
-            public System.Xml.XmlNode SampleXml()
+            public bool Execute(string packageName, XElement xmlData)
             {
-                var str = "<Action runat=\"install\" undo=\"true\" alias=\"AzureCDNToolkit.TransformConfig\" file=\"~/web.config\" xdtfile=\"~/app_plugins/AzureCDNToolkit/install/web.config\">" +
-                         "</Action>";
-                return helper.parseStringToXmlNode(str);
+                return Transform(packageName, xmlData);
             }
 
-            public bool Undo(string packageName, System.Xml.XmlNode xmlData)
+            public bool Undo(string packageName, XElement xmlData)
             {
-                return this.Transform(packageName, xmlData, true);
+                return Transform(packageName, xmlData, true);
             }
 
-            private bool Transform(string packageName, System.Xml.XmlNode xmlData, bool uninstall = false)
+            private bool Transform(string packageName, XElement xmlData, bool uninstall = false)
             {
                 // The config file we want to modify
-                if (xmlData.Attributes != null)
+                if (xmlData.HasAttributes)
                 {
-                    var file = xmlData.Attributes.GetNamedItem("file").Value;
+                    var file = xmlData.Attribute("file").Value;
 
                     var sourceDocFileName = VirtualPathUtility.ToAbsolute(file);
 
@@ -50,7 +57,7 @@
                         fileEnd = string.Format("un{0}", fileEnd);
                     }
 
-                    var xdtfile = string.Format("{0}.{1}", xmlData.Attributes.GetNamedItem("xdtfile").Value, fileEnd);
+                    var xdtfile = string.Format("{0}.{1}", xmlData.Attribute("xdtfile").Value, fileEnd);
                     var xdtFileName = VirtualPathUtility.ToAbsolute(xdtfile);
 
                     // The translation at-hand
@@ -73,8 +80,7 @@
                                 catch (Exception e)
                                 {
                                     // Log error message
-                                    var message = "Error executing TransformConfig package action (check file write permissions): " + e.Message;
-                                    LogHelper.Error(typeof(TransformConfig), message, e);
+                                    _logger.Error<PackageActions>(e, "Error executing TransformConfig package action (check file write permissions): {Message}", e.Message);
                                     return false;
                                 }
                             }

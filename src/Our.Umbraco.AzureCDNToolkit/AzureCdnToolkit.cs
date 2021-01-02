@@ -1,6 +1,7 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit
+﻿using System.Web.Configuration;
+
+namespace Our.Umbraco.AzureCDNToolkit
 {
-    using System.Web.Configuration;
     public sealed class AzureCdnToolkit
     {
         /// <summary>
@@ -21,7 +22,7 @@
         /// </summary>
         private AzureCdnToolkit()
         {
-            this.Refresh();
+            Refresh();
         }
 
         /// <summary>
@@ -82,21 +83,21 @@
             if (WebConfigurationManager.AppSettings["AzureCDNToolkit:UseAzureCdnToolkit"] != null)
             {
                 var useAzureCdnToolkit = bool.Parse(WebConfigurationManager.AppSettings["AzureCDNToolkit:UseAzureCdnToolkit"]);
-                this.UseAzureCdnToolkit = useAzureCdnToolkit;
+                UseAzureCdnToolkit = useAzureCdnToolkit;
             }
             else
             {
-                this.UseAzureCdnToolkit = true;
+                UseAzureCdnToolkit = true;
             }
 
-            this.Domain = WebConfigurationManager.AppSettings["AzureCDNToolkit:Domain"];
-            this.CdnPackageVersion = WebConfigurationManager.AppSettings["AzureCDNToolkit:CdnPackageVersion"];
-            this.CdnUrl = WebConfigurationManager.AppSettings["AzureCDNToolkit:CdnUrl"];
-            this.AssetsContainer = WebConfigurationManager.AppSettings["AzureCDNToolkit:AssetsContainer"] ?? "assets";
-            this.MediaContainer = WebConfigurationManager.AppSettings["AzureCDNToolkit:MediaContainer"] ?? "media";
-            this.UseRedisCache = WebConfigurationManager.AppSettings["AzureCDNToolkit:UseRedisCache"] != null &&
+            Domain = WebConfigurationManager.AppSettings["AzureCDNToolkit:Domain"];
+            CdnPackageVersion = WebConfigurationManager.AppSettings["AzureCDNToolkit:CdnPackageVersion"];
+            CdnUrl = WebConfigurationManager.AppSettings["AzureCDNToolkit:CdnUrl"];
+            AssetsContainer = WebConfigurationManager.AppSettings["AzureCDNToolkit:AssetsContainer"] ?? "assets";
+            MediaContainer = WebConfigurationManager.AppSettings["AzureCDNToolkit:MediaContainer"] ?? "media";
+            UseRedisCache = WebConfigurationManager.AppSettings["AzureCDNToolkit:UseRedisCache"] != null &&
                                  bool.Parse(WebConfigurationManager.AppSettings["AzureCDNToolkit:UseRedisCache"]);
-            this.RedisCacheConnectionString = WebConfigurationManager.AppSettings["AzureCDNToolkit:RedisCacheConnectionString"];
+            RedisCacheConnectionString = WebConfigurationManager.AppSettings["AzureCDNToolkit:RedisCacheConnectionString"];
         }
 
     }

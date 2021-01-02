@@ -1,4 +1,5 @@
-﻿using Umbraco.Core.Logging;
+﻿using Umbraco.Core.Composing;
+using Umbraco.Core.Logging;
 
 namespace Our.Umbraco.AzureCDNToolkit
 {
@@ -7,6 +8,7 @@ namespace Our.Umbraco.AzureCDNToolkit
 
     public static class Cache
     {
+
         public static T GetCacheItem<T>(string cacheKey)
         {
             if (AzureCdnToolkit.Instance.UseRedisCache)
@@ -18,7 +20,7 @@ namespace Our.Umbraco.AzureCDNToolkit
                 catch (Exception e)
                 {
                     // log and fall back to local cache
-                    LogHelper.Error<string>(e.Message, e);
+                    Current.Logger.Error<string>(e);
                 }
             }
 
@@ -38,7 +40,7 @@ namespace Our.Umbraco.AzureCDNToolkit
                 catch (Exception e)
                 {
                     // log and fall back to local cache
-                    LogHelper.Error<string>(e.Message, e);
+                    Current.Logger.Error<string>(e);
                 }
             }
 
@@ -56,7 +58,7 @@ namespace Our.Umbraco.AzureCDNToolkit
                 catch (Exception e)
                 {
                     // log and fall back to local cache
-                    LogHelper.Error<string>(e.Message, e);
+                    Current.Logger.Error<string>(e);
                 }
             }
 
@@ -75,7 +77,7 @@ namespace Our.Umbraco.AzureCDNToolkit
                 catch (Exception e)
                 {
                     // log and fall back to local cache
-                    LogHelper.Error<string>(e.Message, e);
+                    Current.Logger.Error<string>(e);
                 }
             }
 
@@ -94,7 +96,7 @@ namespace Our.Umbraco.AzureCDNToolkit
                 catch (Exception e)
                 {
                     // log and fall back to local cache
-                    LogHelper.Error<string>(e.Message, e);
+                    Current.Logger.Error<string>(e);
                 }
             }
 

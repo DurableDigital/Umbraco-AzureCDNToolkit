@@ -1,28 +1,20 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit.CacheRefreshers
-{
-    using System;
-    using global::Umbraco.Core.Cache;
+﻿using System;
+using Umbraco.Core.Cache;
 
+namespace Our.Umbraco.AzureCDNToolkit.CacheRefreshers
+{
     public class CacheWiper : JsonCacheRefresherBase<CacheWiper>
     {
-        public static Guid Guid
+        public CacheWiper(AppCaches appCaches) : base(appCaches)
         {
-            get { return new Guid("8882A4B1-69C5-4B41-B578-C65E6F630A97"); }
         }
 
-        protected override CacheWiper Instance
-        {
-            get { return this; }
-        }
+        public static Guid Guid => new Guid("8882A4B1-69C5-4B41-B578-C65E6F630A97");
 
-        public override Guid UniqueIdentifier
-        {
-            get { return Guid; }
-        }
+        public override string Name => "AzureCDNToolKitCacheWiper";
 
-        public override string Name
-        {
-            get { return "AzureCDNToolKitCacheWiper"; }
-        }
+        protected override CacheWiper This => this;
+
+        public override Guid RefresherUniqueId => Guid;
     }
 }

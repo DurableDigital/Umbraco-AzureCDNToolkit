@@ -1,25 +1,43 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit.Events
+﻿using System;
+using Newtonsoft.Json;
+using Our.Umbraco.AzureCDNToolkit.CacheRefreshers;
+using Our.Umbraco.AzureCDNToolkit.Models;
+using Umbraco.Core;
+using Umbraco.Core.Cache;
+using Umbraco.Core.Composing;
+using Umbraco.Core.Logging;
+using Umbraco.Core.Services;
+using Umbraco.Web.Cache;
+
+namespace Our.Umbraco.AzureCDNToolkit.Components
 {
-    using System.Collections.Generic;
-
-    using Newtonsoft.Json;
-
-    using global::Umbraco.Core;
-    using global::Umbraco.Core.Cache;
-    using global::Umbraco.Web.Cache;
-    using global::Umbraco.Core.Logging;
-
-    using CacheRefreshers;
-    using Models;
-
-    public class CacheEvents: ApplicationEventHandler
+    // ReSharper disable once ClassNeverInstantiated.Global
+    public class DistributedCacheRefresherComponent: IComponent
     {
-        protected override void ApplicationStarted(UmbracoApplicationBase umbracoApplication,
-            ApplicationContext applicationContext)
+
+        private readonly ILogger _logger;
+        private readonly IServerRegistrationService _serverRegistrationService;
+        private readonly DistributedCache _distributedCache;
+
+        public DistributedCacheRefresherComponent(ILogger logger, IServerRegistrationService serverRegistrationService, DistributedCache distributedCache)
+        {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _serverRegistrationService = serverRegistrationService ?? throw new ArgumentNullException(nameof(serverRegistrationService));
+            _distributedCache = distributedCache ?? throw new ArgumentNullException(nameof(distributedCache));
+        }
+
+        public void Initialize()
         {
             CacheRefresherBase<CacheRequester>.CacheUpdated += CacheRequester_Request;
             CacheRefresherBase<CacheResponder>.CacheUpdated += CacheResponder_Response;
             CacheRefresherBase<CacheWiper>.CacheUpdated += CacheWiper_Request;
+        }
+
+        public void Terminate()
+        {
+            CacheRefresherBase<CacheRequester>.CacheUpdated -= CacheRequester_Request;
+            CacheRefresherBase<CacheResponder>.CacheUpdated -= CacheResponder_Response;
+            CacheRefresherBase<CacheWiper>.CacheUpdated -= CacheWiper_Request;
         }
 
         /// <summary>
@@ -34,7 +52,7 @@
             var payload = JsonConvert.DeserializeObject<CachedImagesRequest>(rawPayLoad);
 
             if (
-                ApplicationContext.Current.Services.ServerRegistrationService.CurrentServerIdentity.InvariantEquals(
+                _serverRegistrationService.CurrentServerIdentity.InvariantEquals(
                     payload.ServerIdentity))
             {
                 // THIS SERVER SHOULD RETURN DATA VIA CacheImagesResponder
@@ -48,7 +66,8 @@
                 };
 
                 var json = JsonConvert.SerializeObject(response);
-                DistributedCache.Instance.RefreshByJson(CacheResponder.Guid, json);
+
+                _distributedCache.RefreshByJson(CacheResponder.Guid, json);
             }
         }
 
@@ -62,8 +81,8 @@
             var rawPayLoad = (string)e.MessageObject;
             var payload = JsonConvert.DeserializeObject<CachedImagesResponse>(rawPayLoad);
 
-            var cacheKey = string.Format("{0}{1}", AzureCDNToolkit.Constants.Keys.CachePrefixResponse, payload.RequestId);
-            Cache.InsertCacheItem<IEnumerable<CachedImage>>(cacheKey, () => payload.CachedImages);
+            var cacheKey = $"{Constants.Keys.CachePrefixResponse}{payload.RequestId}";
+            Cache.InsertCacheItem(cacheKey, () => payload.CachedImages);
         }
 
 
@@ -79,7 +98,7 @@
             var payload = JsonConvert.DeserializeObject<CachedImagesWipe>(rawPayLoad);
 
             if (
-                ApplicationContext.Current.Services.ServerRegistrationService.CurrentServerIdentity.InvariantEquals(
+                _serverRegistrationService.CurrentServerIdentity.InvariantEquals(
                     payload.ServerIdentity))
             {
                 // This server should wipe it's application cache
@@ -87,18 +106,18 @@
                 if (payload.WebUrl != null)
                 {
                     // wipe specific url
-                    var cachePrefix = AzureCDNToolkit.Constants.Keys.CachePrefix;
-                    var cacheKey = string.Format("{0}{1}", cachePrefix, payload.WebUrl);
+                    var cachePrefix = Constants.Keys.CachePrefix;
+                    var cacheKey = $"{cachePrefix}{payload.WebUrl}";
                     Cache.ClearCacheItem(cacheKey);
 
-                    LogHelper.Info<CacheEvents>(string.Format("Azure CDN Toolkit: CDN image path runtime cache for key {0} cleared by dashboard control request", payload.WebUrl));
+                    _logger.Info<DistributedCacheRefresherComponent>("Azure CDN Toolkit: CDN image path runtime cache for key {WebUrl} cleared by dashboard control request", payload.WebUrl);
                 }
                 else
                 {
                     // clear all keys
                     Cache.ClearCacheByKeySearch(AzureCDNToolkit.Constants.Keys.CachePrefix);
 
-                    LogHelper.Info<CacheEvents>("Azure CDN Toolkit: CDN image path runtime cache cleared by dashboard control request");
+                    _logger.Info<DistributedCacheRefresherComponent>("Azure CDN Toolkit: CDN image path runtime cache cleared by dashboard control request");
                 }
 
             }

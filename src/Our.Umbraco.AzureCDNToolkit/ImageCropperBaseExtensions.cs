@@ -1,13 +1,15 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+
+using Newtonsoft.Json;
+
+using Umbraco.Core.Composing;
+
+namespace Our.Umbraco.AzureCDNToolkit
 {
-    using System;
-    using System.Collections.Generic;
-    using System.Globalization;
-    using System.Linq;
-    using System.Text;
-    using Newtonsoft.Json;
-    using global::Umbraco.Core.Logging;
-    using global::Umbraco.Web.Models;
     internal static class ImageCropperBaseExtensions
     {
         internal static ImageCropData GetImageCrop(this string json, string id)
@@ -22,7 +24,7 @@
                 }
                 catch (Exception ex)
                 {
-                    LogHelper.Error(typeof(ImageCropperBaseExtensions), "Could not parse the json string: " + json, ex);
+                    Current.Logger.Error(typeof(ImageCropperBaseExtensions), ex, "Could not parse the json string: {json}", json);
                 }
             }
 
@@ -40,7 +42,7 @@
                 }
                 catch (Exception ex)
                 {
-                    LogHelper.Error(typeof(ImageCropperBaseExtensions), "Could not parse the json string: " + json, ex);
+                    Current.Logger.Error(typeof(ImageCropperBaseExtensions), ex, "Could not parse the json string: {json}", json);
                 }
             }
 

@@ -1,23 +1,26 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit.Events
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+using System.Web.Routing;
+using Our.Umbraco.AzureCDNToolkit.Controllers;
+using Umbraco.Core.Composing;
+using Umbraco.Web;
+using Umbraco.Web.JavaScript;
+
+namespace Our.Umbraco.AzureCDNToolkit.Components
 {
-    using System.Collections.Generic;
-    using System.Linq;
-
-    using System.Web;
-    using System.Web.Mvc;
-    using System.Web.Routing;
-
-    using global::Umbraco.Core;
-    using global::Umbraco.Web;
-    using global::Umbraco.Web.UI.JavaScript;
-
-    using Controllers;
-
-    public class ServerVariableParser : ApplicationEventHandler
+    // ReSharper disable once ClassNeverInstantiated.Global
+    public class ServerVariableParserComponent : IComponent
     {
-        protected override void ApplicationStarted(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
+        public void Initialize()
         {
             ServerVariablesParser.Parsing += ServerVariablesParser_Parsing;
+        }
+
+        public void Terminate()
+        {
+            ServerVariablesParser.Parsing -= ServerVariablesParser_Parsing;
         }
 
         void ServerVariablesParser_Parsing(object sender, Dictionary<string, object> e)

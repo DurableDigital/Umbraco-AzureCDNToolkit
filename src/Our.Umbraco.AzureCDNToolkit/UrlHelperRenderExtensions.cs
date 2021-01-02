@@ -1,25 +1,24 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit
+﻿using System;
+using System.Globalization;
+using System.Net;
+using System.Text;
+using System.Web;
+using System.Web.Mvc;
+using System.Linq;
+using System.Net.Http;
+using System.Web.Configuration;
+
+using Newtonsoft.Json;
+using Our.Umbraco.AzureCDNToolkit.Models;
+
+using Umbraco.Core;
+using Umbraco.Core.Composing;
+using Umbraco.Web;
+using Umbraco.Web.Models;
+using Umbraco.Core.Models.PublishedContent;
+
+namespace Our.Umbraco.AzureCDNToolkit
 {
-    using System;
-    using System.Globalization;
-    using System.Net;
-    using System.Text;
-    using System.Web;
-    using System.Web.Mvc;
-    using System.Linq;
-    using System.Net.Http;
-    using System.Web.Configuration;
-
-    using global::Umbraco.Core.Models;
-    using global::Umbraco.Web.Models;
-    using global::Umbraco.Core;
-    using global::Umbraco.Web;
-    using global::Umbraco.Core.Logging;
-
-    using Newtonsoft.Json;
-
-    using Models;
-
     public static class UrlHelperRenderExtensions
     {
         public static IHtmlString GetCropCdnUrl(this UrlHelper urlHelper,
@@ -88,21 +87,16 @@
         // Special version of the method with fallback image for TinyMce converter
         internal static IHtmlString ResolveCdnFallback(this UrlHelper urlHelper, IPublishedContent mediaItem, bool asset = true, string querystring = null, bool htmlEncode = true, string fallbackImage = null)
         {
-
-            LogHelper.Debug(typeof(UrlHelperRenderExtensions), string.Format("Parsed out media item from TinyMce: {0}", mediaItem.Name));
-
+            Current.Logger.Debug(typeof(UrlHelperRenderExtensions), "Parsed out media item from TinyMce: {Name}", mediaItem.Name);
             var std = ResolveCdn(urlHelper, mediaItem, asset, querystring, htmlEncode);
-            if (std == null)
-            {
-                return ResolveCdn(urlHelper, fallbackImage, asset, htmlEncode);
-            }
-            return std;
+            return std == null ? ResolveCdn(urlHelper, fallbackImage, asset, htmlEncode) : std;
         }
+
         public static IHtmlString ResolveCdn(this UrlHelper urlHelper, IPublishedContent mediaItem, bool asset = true, string querystring = null, bool htmlEncode = true)
         {
             var cacheBusterValue = mediaItem.UpdateDate.ToFileTimeUtc().ToString(CultureInfo.InvariantCulture);
 
-            var path = mediaItem.Url;
+            var path = mediaItem.Url();
 
             // If mediaItem.Url is null attempt to get from Cropper
             if (path == null)
@@ -251,7 +245,7 @@
                 {
                     var newCachedImage = new CachedImage { WebUrl = cropUrl };
 
-                    LogHelper.Debug(typeof(UrlHelperRenderExtensions), string.Format("Attempting to resolve: {0}", absoluteCropPath));
+                    Current.Logger.Debug(typeof(UrlHelperRenderExtensions), "Attempting to resolve: {Path}", absoluteCropPath);
 
                     // if security token has been setup we need to add it here
                     var securityToken = WebConfigurationManager.AppSettings["AzureCDNToolkit:SecurityToken"];
@@ -276,7 +270,7 @@
                                 // this is to mark URLs returned direct to Blob by ImageProcessor as not fully resolved
                                 newCachedImage.Resolved = absoluteUri.InvariantContains(AzureCdnToolkit.Instance.CdnUrl);
 
-                                Cache.InsertCacheItem<CachedImage>(cacheKey, () => newCachedImage);
+                                Cache.InsertCacheItem(cacheKey, () => newCachedImage);
                                 fullUrlPath = response.ResponseUri.AbsoluteUri;
                             }
                         }
@@ -290,13 +284,13 @@
             }
             catch (Exception ex)
             {
-                LogHelper.Error(typeof(UrlHelperRenderExtensions), "Error resolving media url from the CDN", ex);
+                Current.Logger.Error(typeof(UrlHelperRenderExtensions), ex, "Error resolving media url from the CDN");
 
                 // we have tried 5 times and failed so let's cache the normal address
                 var newCachedImage = new CachedImage { WebUrl = cropUrl };
                 newCachedImage.Resolved = false;
                 newCachedImage.CacheUrl = cropUrl;
-                Cache.InsertCacheItem<CachedImage>(cacheKey, () => newCachedImage);
+                Cache.InsertCacheItem(cacheKey, () => newCachedImage);
 
                 fullUrlPath = cropUrl;
             }
@@ -317,7 +311,7 @@
                     delegateAction();
                     return;
                 }
-                catch (Exception e)
+                catch
                 {
                     if (retry >= 5)
                     {

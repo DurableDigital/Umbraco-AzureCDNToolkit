@@ -1,22 +1,49 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
+﻿using System;
+using System.Linq;
+using System.Web;
+using System.Web.Mvc;
+using System.Collections.Specialized;
+
+using HtmlAgilityPack;
+
+using Umbraco.Core;
+using Umbraco.Core.Models.PublishedContent;
+using Umbraco.Web;
+using Umbraco.Web.PropertyEditors.ValueConverters;
+using Umbraco.Core.PropertyEditors;
+
+namespace Our.Umbraco.AzureCDNToolkit.ValueConverters
 {
-    using System.Linq;
-    using System.Web;
-    using System.Web.Mvc;
-    using System.Collections.Specialized;
 
-    using global::Umbraco.Core;
-    using global::Umbraco.Web;
-    using global::Umbraco.Core.Models.PublishedContent;
-    using global::Umbraco.Core.PropertyEditors;
-    using global::Umbraco.Web.PropertyEditors.ValueConverters;
-
-    using HtmlAgilityPack;
-
-    [PropertyValueType(typeof(IHtmlString))]
-    [PropertyValueCache(PropertyCacheValue.All, PropertyCacheLevel.Content)]
     public class RteValueConverter : RteMacroRenderingValueConverter
     {
+
+        private readonly IUmbracoContextAccessor _umbracoContextAccessor;
+
+        public RteValueConverter(
+            IUmbracoContextAccessor umbracoContextAccessor,
+            global::Umbraco.Web.Macros.IMacroRenderer macroRenderer,
+            global::Umbraco.Web.Templates.HtmlLocalLinkParser linkParser,
+            global::Umbraco.Web.Templates.HtmlUrlParser urlParser,
+            global::Umbraco.Web.Templates.HtmlImageSourceParser imageSourceParser)
+                : base(umbracoContextAccessor, macroRenderer, linkParser, urlParser, imageSourceParser)
+        {
+            _umbracoContextAccessor = umbracoContextAccessor ?? throw new ArgumentNullException(nameof(umbracoContextAccessor));
+        }
+
+        public override PropertyCacheLevel GetPropertyCacheLevel(IPublishedPropertyType propertyType)
+        {
+            // .Content in v7 is .Element in v8
+            // https://our.umbraco.com/apidocs/v7/csharp/api/Umbraco.Core.PropertyEditors.PropertyCacheLevel.html
+            // https://our.umbraco.com/apidocs/v8/csharp/api/Umbraco.Core.PropertyEditors.PropertyCacheLevel.html
+            return PropertyCacheLevel.Element; 
+        }
+
+        public override System.Type GetPropertyValueType(IPublishedPropertyType propertyType)
+        {
+            return typeof(IHtmlString);
+        }
+
         public override object ConvertDataToSource(PublishedPropertyType propertyType, object source, bool preview)
         {
             if (source == null)
@@ -51,7 +78,7 @@
             return modified ? doc.DocumentNode.OuterHtml : coreConversion;
         }
 
-        private static void ResolveUrlsForElement(HtmlDocument doc, string elementName, string attributeName, string idAttributeName, bool idAttributeMandatory, bool asset, ref bool modified)
+        private void ResolveUrlsForElement(HtmlDocument doc, string elementName, string attributeName, string idAttributeName, bool idAttributeMandatory, bool asset, ref bool modified)
         {
             var htmlNodes = doc.DocumentNode.SelectNodes(string.Concat("//", elementName));
 
@@ -94,7 +121,7 @@
                     int nodeId;
                     if (int.TryParse(idAttr.Value, out nodeId))
                     {
-                        var node = UmbracoContext.Current.MediaCache.GetById(nodeId);
+                        var node = _umbracoContextAccessor.UmbracoContext.Media.GetById(nodeId);
 
                         if (node != null)
                         {

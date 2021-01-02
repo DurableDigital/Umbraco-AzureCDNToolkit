@@ -1,25 +1,23 @@
-﻿namespace Our.Umbraco.AzureCDNToolkit.Events
+﻿using System.Linq;
+using System.Web;
+using System.Web.Configuration;
+using ImageProcessor.Web.HttpModules;
+using Umbraco.Core.Composing;
+using Umbraco.Web.Security;
+
+namespace Our.Umbraco.AzureCDNToolkit.Components
 {
-    using System.Linq;
-    using System.Web;
-    using System.Web.Configuration;
-
-    using global::Umbraco.Core;
-    using global::Umbraco.Core.Security;
-    using global::Umbraco.Core.PropertyEditors;
-    using global::Umbraco.Web.PropertyEditors.ValueConverters;
-
-    using ImageProcessor.Web.HttpModules;
-    public class UmbracoEvents : ApplicationEventHandler
+    // ReSharper disable once ClassNeverInstantiated.Global
+    public class ImageProcessorValidationComponent : IComponent
     {
-        protected override void ApplicationStarting(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
-        {
-            PropertyValueConvertersResolver.Current.RemoveType<RteMacroRenderingValueConverter>();
-        }
-
-        protected override void ApplicationStarted(UmbracoApplicationBase umbracoApplication, ApplicationContext applicationContext)
+        public void Initialize()
         {
             ImageProcessingModule.ValidatingRequest += ImageProcessingModule_ValidatingRequest;
+        }
+
+        public void Terminate()
+        {
+            ImageProcessingModule.ValidatingRequest -= ImageProcessingModule_ValidatingRequest;
         }
 
         private void ImageProcessingModule_ValidatingRequest(object sender, ImageProcessor.Web.Helpers.ValidatingRequestEventArgs args)
@@ -34,7 +32,7 @@
                 // if token is not present or value doesn't match then we can cancel the request
                 if (!queryCollection.AllKeys.Contains("securitytoken") || queryCollection["securitytoken"] != securityToken)
                 {
-                    // we can allow on-demand image processor requests if the user has a umbraco auth ticket which means they are logged into Umbraco for things like grid editor previews
+                    // We can allow on-demand image processor requests if the user has an Umbraco auth ticket which means they are logged into Umbraco for things like grid editor previews
                     var ticket = new HttpContextWrapper(HttpContext.Current).GetUmbracoAuthTicket();
                     if (ticket == null)
                     {
